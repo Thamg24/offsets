@@ -1,0 +1,832 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Land Offset Estimator · OENVC</title>
+<meta name="description" content="Draw an area of land and estimate the biodiversity offsets and carbon it requires or could provide, across Australian states, the EPBC Act and New Zealand.">
+<meta property="og:title" content="Land Offset Estimator · OENVC">
+<meta property="og:description" content="Free screening tool: biodiversity offset and carbon estimates for any area of land in Australia and New Zealand.">
+<meta name="theme-color" content="#003a00">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="https://unpkg.com/@geoman-io/leaflet-geoman-free@2/dist/leaflet-geoman.css">
+<style>
+:root{
+  --navy:#032b0f; --navy-2:#0a3a18; --blue:#0b7a35; --cyan:#8fdc6a; --teal:#c9f27a; --brand:#003a00;
+  --ink:#0e2414; --body:#33403a; --muted:#6a766f; --line:#d0d0d0; --soft:#f0f0f0; --white:#fff;
+  --warn:#8a5a00; --warn-bg:#fff6e0;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--white);color:var(--body);font:15px/1.55 Inter,"Helvetica Neue",Arial,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:var(--blue)}
+h1,h2,h3{font-family:"Source Serif 4",Georgia,serif;font-weight:600;color:var(--ink);margin:0;letter-spacing:-.015em}
+button,input,select{font:inherit;color:inherit}
+
+/* header */
+header{position:sticky;top:0;z-index:1000;background:#fff;border-bottom:1px solid var(--line)}
+.nav{height:64px;display:flex;align-items:center;justify-content:space-between;padding:0 24px;gap:16px}
+.brand{display:flex;align-items:center;gap:14px;text-decoration:none;min-width:0}
+.brand img{height:30px;width:auto;display:block}
+.brand .t{display:flex;flex-direction:column;line-height:1.15;border-left:1px solid var(--line);padding-left:14px;min-width:0}
+.brand .t b{font-family:"Source Serif 4",Georgia,serif;font-size:20px;font-weight:600;color:var(--navy);white-space:nowrap}
+.brand .t span{font-size:12px;color:var(--muted);white-space:nowrap}
+.nav nav{display:flex;gap:22px;font-size:14px;font-weight:500}
+.nav nav a{color:var(--navy);text-decoration:none}
+.nav nav a:hover{color:var(--blue)}
+.nav nav a{white-space:nowrap}
+@media (max-width:640px){.brand .t span{display:none}.brand .t b{font-size:16px}.brand img{height:24px}.brand{gap:10px}.brand .t{padding-left:10px}.nav{padding:0 14px}.nav nav a.opt{display:none}}
+
+/* layout */
+.app{display:grid;grid-template-columns:minmax(0,1fr) 460px;height:calc(100vh - 64px)}
+.mapcol{position:relative;min-height:0}
+#map{position:absolute;inset:0;background:#dfe6e1}
+.panel{border-left:1px solid var(--line);overflow-y:auto;background:#fff}
+@media (max-width:980px){
+  .app{grid-template-columns:1fr;height:auto}
+  .mapcol{height:62vh;min-height:380px}
+  .panel{border-left:0;border-top:1px solid var(--line);overflow:visible}
+}
+
+/* map toolbar */
+.mtool{position:absolute;z-index:500;top:12px;left:60px;right:12px;display:flex;gap:8px;flex-wrap:wrap;pointer-events:none}
+.mtool>*{pointer-events:auto}
+.search{display:flex;flex:1 1 260px;max-width:420px;background:#fff;border:1px solid var(--line);border-radius:999px;box-shadow:0 2px 8px rgba(0,0,0,.12);overflow:hidden}
+.search input{border:0;outline:0;padding:9px 14px;flex:1;min-width:0;background:transparent}
+.search button{border:0;background:var(--blue);color:#fff;padding:0 16px;cursor:pointer;font-weight:600}
+.mbtn{display:inline-flex;align-items:center;background:#fff;border:1px solid var(--line);border-radius:999px;padding:8px 14px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.12);font-size:13px;font-weight:600;color:var(--navy);white-space:nowrap}
+.mbtn:hover{border-color:var(--blue);color:var(--blue)}
+.results-list{position:absolute;top:48px;left:0;width:min(420px,100%);background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 6px 18px rgba(0,0,0,.15);overflow:hidden;display:none}
+.results-list button{display:block;width:100%;text-align:left;border:0;background:#fff;padding:9px 14px;cursor:pointer;font-size:13px;border-bottom:1px solid var(--soft)}
+.results-list button:hover{background:var(--soft)}
+.maphint{position:absolute;z-index:500;left:50%;bottom:22px;transform:translateX(-50%);background:var(--navy);color:#fff;border-radius:999px;padding:9px 18px;font-size:13px;box-shadow:0 4px 14px rgba(0,0,0,.25);white-space:nowrap;max-width:calc(100% - 24px);overflow:hidden;text-overflow:ellipsis}
+.maphint b{color:var(--teal)}
+
+/* panel */
+.sec{padding:20px 24px;border-bottom:1px solid var(--line)}
+@media (max-width:640px){.sec{padding:18px 16px}}
+.kicker{font-size:12px;font-weight:600;letter-spacing:.02em;color:var(--blue)}
+.sec h2{font-size:22px;margin:2px 0 6px}
+.lede{color:var(--muted);font-size:14px;margin:0}
+.site{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+.stat{background:var(--soft);border-radius:10px;padding:10px 12px;min-width:0}
+.stat .l{font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+.stat .v{font-family:"Source Serif 4",Georgia,serif;font-size:22px;font-weight:600;color:var(--ink);line-height:1.2;overflow-wrap:anywhere}
+.stat .s{font-size:12px;color:var(--muted)}
+.stat select,.stat input{width:100%;margin-top:4px;padding:5px 8px;border:1px solid var(--line);border-radius:8px;background:#fff;font-size:13px}
+.tabs{display:flex;border-bottom:1px solid var(--line);position:sticky;top:0;background:#fff;z-index:5}
+.tab{flex:1;border:0;background:#fff;padding:14px 10px;font-weight:600;color:var(--muted);cursor:pointer;border-bottom:3px solid transparent;font-size:15px}
+.tab[aria-selected="true"]{color:var(--navy);border-bottom-color:var(--blue)}
+.seg{display:flex;background:var(--soft);border-radius:999px;padding:4px;gap:4px;margin:0 0 16px}
+.seg button{flex:1;border:0;background:transparent;border-radius:999px;padding:8px 10px;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer}
+.seg button[aria-pressed="true"]{background:#fff;color:var(--navy);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.method{font-size:13px;color:var(--muted);margin:0 0 14px}
+.method b{color:var(--ink)}
+.fields{display:grid;grid-template-columns:1fr 1fr;gap:12px 12px}
+.f{display:flex;flex-direction:column;gap:4px;min-width:0}
+.f.full{grid-column:1/-1}
+.f label{font-size:12.5px;font-weight:600;color:var(--ink)}
+.f input,.f select{padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:#fff;width:100%}
+.f input:focus,.f select:focus{outline:2px solid var(--cyan);border-color:var(--blue)}
+.f .h{font-size:11.5px;color:var(--muted);line-height:1.4}
+.chk{display:flex;align-items:flex-start;gap:8px;font-size:13px;grid-column:1/-1}
+.chk input{margin-top:3px}
+.out{margin-top:18px;background:var(--navy);color:#fff;border-radius:14px;padding:16px 18px}
+.out .row{display:flex;justify-content:space-between;gap:12px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.12);font-size:13.5px}
+.out .row:last-child{border-bottom:0}
+.out .row span:last-child{font-weight:600;text-align:right;white-space:nowrap}
+.out .big{font-family:"Source Serif 4",Georgia,serif;font-size:30px;font-weight:600;color:var(--teal);line-height:1.1}
+.out .bigl{font-size:12px;color:#c7d3dc;margin-bottom:8px}
+.note{margin-top:12px;font-size:12.5px;color:var(--body);background:var(--soft);border-radius:10px;padding:10px 12px}
+.note.warn{background:var(--warn-bg);color:var(--warn)}
+.note a{color:var(--blue)}
+.empty{text-align:center;padding:26px 10px;color:var(--muted);font-size:14px}
+.empty b{display:block;font-family:"Source Serif 4",Georgia,serif;font-size:18px;color:var(--ink);margin-bottom:6px}
+details.card{border:1px solid var(--line);border-radius:12px;margin-top:16px;overflow:hidden}
+details.card summary{cursor:pointer;padding:12px 14px;font-weight:600;color:var(--navy);list-style:none;display:flex;justify-content:space-between;align-items:center;gap:10px}
+details.card summary::-webkit-details-marker{display:none}
+details.card summary::after{content:"+";font-size:18px;color:var(--blue)}
+details.card[open] summary::after{content:"–"}
+details.card .inner{padding:0 14px 14px}
+.actions{display:flex;flex-wrap:wrap;gap:8px}
+.btn{border:1px solid var(--blue);background:#fff;color:var(--blue);border-radius:999px;padding:8px 14px;font-weight:600;font-size:13px;cursor:pointer}
+.btn.primary{background:var(--blue);color:#fff}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.src{font-size:12.5px;color:var(--body)}
+.src ul{padding-left:18px;margin:6px 0}
+.src li{margin:3px 0}
+.src h3{font-size:15px;margin:14px 0 4px}
+.badge{display:inline-block;font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px;background:var(--teal);color:var(--navy);vertical-align:middle}
+footer{padding:18px 24px;font-size:12px;color:var(--muted)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+@media print{
+  header nav,.mtool,.maphint,.tabs,.seg,.actions,.leaflet-control-container{display:none!important}
+  .app{display:block;height:auto}.mapcol{height:360px}.panel{border:0}
+  .out{background:#fff;color:#000;border:1px solid #999}.out .big{color:#000}.out .bigl{color:#333}
+  .out .row{border-color:#ddd}
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="nav">
+    <a class="brand" href="https://www.oenvc.com/">
+      <img src="data:image/png;base64,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" alt="OENVC">
+      <span class="t"><b>Land Offset Estimator</b><span>Biodiversity offsets &amp; land carbon · AU &amp; NZ</span></span>
+    </a>
+    <nav><a href="#methods" class="opt">Methods</a><a href="https://www.oenvc.com/">All tools</a></nav>
+  </div>
+</header>
+
+<div class="app">
+  <div class="mapcol">
+    <div id="map" aria-label="Map. Draw a polygon to define the land area."></div>
+    <div class="mtool">
+      <form class="search" id="searchForm" role="search" style="position:relative">
+        <label class="sr" for="q">Search for a place</label>
+        <input id="q" placeholder="Search a place or address in AU / NZ" autocomplete="off">
+        <button type="submit">Go</button>
+        <div class="results-list" id="searchResults"></div>
+      </form>
+      <button class="mbtn" id="drawBtn" type="button">Draw area</button>
+      <button class="mbtn" id="baseBtn" type="button">Street map</button>
+      <label class="mbtn" for="geoFile">Import GeoJSON</label>
+      <input type="file" id="geoFile" accept=".geojson,.json,application/geo+json,application/json" hidden>
+      <button class="mbtn" id="clearBtn" type="button">Clear</button>
+    </div>
+    <div class="maphint" id="maphint"><b>Start:</b> search a location, then click <b>Draw area</b> and click around the site boundary.</div>
+  </div>
+
+  <aside class="panel">
+    <section class="sec">
+      <span class="kicker">Screening tool</span>
+      <h2>Offsets for an area of land</h2>
+      <p class="lede">Draw a site to estimate the biodiversity offset it would trigger if cleared, or the credits it could generate as an offset site, plus carbon lost from clearing or gained from revegetation.</p>
+      <div class="site">
+        <div class="stat"><div class="l">Area</div><div class="v" id="areaV">—</div><div class="s" id="areaS">No area drawn</div></div>
+        <div class="stat"><div class="l">Jurisdiction</div>
+          <select id="jurSel" aria-label="Jurisdiction">
+            <option value="">Detect from map</option>
+            <optgroup label="Australia">
+              <option value="VIC">Victoria</option><option value="NSW">New South Wales</option><option value="QLD">Queensland</option>
+              <option value="SA">South Australia</option><option value="WA">Western Australia</option><option value="TAS">Tasmania</option>
+              <option value="NT">Northern Territory</option><option value="ACT">Australian Capital Territory</option>
+            </optgroup>
+            <optgroup label="New Zealand"><option value="NZ">New Zealand</option></optgroup>
+          </select>
+          <div class="s" id="jurS">Draw an area to detect</div>
+        </div>
+        <div class="stat"><div class="l">Mean annual rainfall</div>
+          <input id="rainIn" type="number" min="0" step="10" placeholder="mm/yr" aria-label="Mean annual rainfall in mm">
+          <div class="s" id="rainS">Auto-filled from ERA5 (2016–2025)</div>
+        </div>
+        <div class="stat"><div class="l">Centroid</div><div class="v" style="font-size:15px" id="ctrV">—</div><div class="s" id="ctrS">&nbsp;</div></div>
+      </div>
+    </section>
+
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" id="tab-bio" aria-selected="true" data-tab="bio">Biodiversity offsets</button>
+      <button class="tab" role="tab" id="tab-carb" aria-selected="false" data-tab="carb">Land carbon</button>
+    </div>
+
+    <section class="sec" id="body"></section>
+
+    <section class="sec">
+      <div class="actions">
+        <button class="btn primary" id="csvBtn" type="button" disabled>Download summary (CSV)</button>
+        <button class="btn" id="gjBtn" type="button" disabled>Download boundary (GeoJSON)</button>
+        <button class="btn" id="printBtn" type="button">Print</button>
+      </div>
+    </section>
+
+    <section class="sec src" id="methods">
+      <span class="kicker">Methods &amp; sources</span>
+      <h2 style="font-size:20px">How the numbers are worked out</h2>
+      <p>This is a <b>screening estimate</b> for early planning and budgeting. It does not replace an accredited assessment, the regulator's own calculator, or a site survey. Every input marked as an assumption should be replaced with site data before you rely on the result.</p>
+
+      <h3>Victoria</h3>
+      <ul>
+        <li>General habitat units = extent × condition score × general landscape factor × 1.5, where the general landscape factor = 0.5 + (strategic biodiversity value score ÷ 2). Species habitat units use the habitat importance score and a multiplier of 2. Minimum SBV of the offset is 80% of the weighted average SBV removed. (<i>Guidelines for the removal, destruction or lopping of native vegetation</i>, 2017; as applied in DEECA Native Vegetation Removal reports.)</li>
+        <li>Offset site units = area × gain score per hectare × general landscape factor. Gain scores come from the Native Vegetation Gain Scoring Manual and depend on condition, security and management commitments; the default here is an assumption.</li>
+        <li>Credit prices are set by sellers on the Native Vegetation Credit Register and vary widely by catchment and attributes. Use a broker quote.</li>
+      </ul>
+      <h3>New South Wales</h3>
+      <ul>
+        <li>Ecosystem credits = change in vegetation integrity (VI) score × area × biodiversity risk weighting × 0.25 (BAM 2020, Equation 1). Credits created at a stewardship site use the predicted VI gain × area × 0.25. The BAM Calculator (BAM-C) also handles species credits, hollow-bearing trees, VI thresholds, security benefit and gain risk-weighting, which are not modelled here.</li>
+      </ul>
+      <h3>Queensland</h3>
+      <ul>
+        <li>Financial settlement = (offset area × on-ground cost per ha) + landholder incentive payment + administrative cost (25% of on-ground cost, floor $50,000 for impacts over 2.5 ha, cap $1,000,000). Offset area = impact area × matter multiplier (maximum 4). The terrestrial sliding scale applies to offsets over 100 ha; the landholder incentive payment has a $10,000 floor. (Queensland Environmental Offsets Policy v1.15, Appendix 4.) On-ground cost and land value come from the policy's subregion and LGA tables or the DETSI online calculator. The framework is under review in 2026.</li>
+      </ul>
+      <h3>South Australia</h3>
+      <ul>
+        <li>Total biodiversity score = unit biodiversity score (vegetation condition × landscape context × conservation significance) × area, from the Bushland or Rangeland Assessment Method. The Native Vegetation Council sets the SEB points and the payment rate per point into the Native Vegetation Fund.</li>
+      </ul>
+      <h3>WA, Tasmania, NT, ACT, EPBC Act and New Zealand</h3>
+      <ul>
+        <li>These have no single state formula a desktop tool can reproduce, so a transparent quality-hectare method is used: impact = area × habitat quality (0–10); offset gain per hectare = (quality with management − current quality) × confidence of success. This follows the logic of the former EPBC Offsets Assessment Guide without its time-discounting and averted-loss terms.</li>
+        <li>EPBC Act: the National Environmental Standard for Environmental Offsets was made on 19 August 2026 and requires a net gain; proponents can deliver an offset or pay a restoration contribution charge. The draft method for calculating that charge closed for comment on 14 October 2026 and is not modelled here.</li>
+        <li>New Zealand: the Planning Bill and Natural Environment Bill passed their third readings in September 2026, replacing the RMA in stages to 2030 while existing plans and consents continue. Biodiversity offsetting currently follows the NPS-IB offsetting principles (net gain required); use the net-gain margin to reflect that.</li>
+      </ul>
+      <h3>Land carbon</h3>
+      <ul>
+        <li><b>Australia, revegetation:</b> indicative 25-year average sequestration for mixed-species environmental plantings by rainfall band (about 1 t CO₂-e/ha/yr below 350 mm rising to about 6.5 above 800 mm), drawn from FullCAM-based studies (CSIRO, MLA, Henry et al. 2015). Narrow belts (&lt;40 m) sequester more per hectare. ACCU estimates deduct the 5% risk-of-reversal buffer, plus a 20% reduction for a 25-year permanence period. Rainfall is the 2016–2025 ERA5 mean from Open-Meteo, which is coarse; override it with a local BoM figure. For a real project, model the site in FullCAM.</li>
+        <li><b>New Zealand, afforestation:</b> NZUs under averaging accounting use the ETS standard carbon tables (forests under 100 ha): radiata pine about 20.1 t CO₂/ha/yr to age 16, exotic hardwoods about 26.7 t to age 12, indigenous forest about 8.4 t to age 23 (Scion, 2023). Radiata tables vary by region; this uses the national average.</li>
+        <li><b>Clearing emissions:</b> live biomass carbon (t C/ha) × area × share removed × 44/12. Australian presets are national averages from the Australian Greenhouse Office's 2003 biomass totals divided by forest area by type (ABS Year Book 2004); NZ presets use the IPCC 2006 default above-ground stock for NZ temperate oceanic forest (360 t dry matter/ha) and the ETS indigenous table. Soil carbon is excluded. Site biomass varies several-fold from these averages.</li>
+        <li><b>Prices</b> (editable): ACCU spot A$37.75 (CORE Markets, close 19 Oct 2026); NZU spot NZ$49.50 (Marex via PF Olsen, 19 Oct 2026).</li>
+      </ul>
+      <h3>Map data</h3>
+      <ul><li>Imagery © Esri and contributors; street map © OpenStreetMap contributors; place search and jurisdiction lookup via Nominatim; rainfall via Open-Meteo (ERA5). Areas are geodesic (Turf.js). Overlapping polygons are counted twice.</li></ul>
+    </section>
+    <footer>OENVC · Free tools for environmental and sustainability compliance · Estimates only, no warranty. <span id="yr"></span></footer>
+  </aside>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/@geoman-io/leaflet-geoman-free@2/dist/leaflet-geoman.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@turf/turf@7/turf.min.js"></script>
+<script>
+/* =========================================================
+   CALCULATIONS (pure functions; tested separately)
+   ========================================================= */
+const CALC = {
+  vicRequired({ha, condition, sbv, species, his}){
+    const hh = ha * condition, glf = 0.5 + sbv/2;
+    const r = { hh, glf, ghu: hh * glf * 1.5, minSbv: 0.8 * sbv };
+    if (species){ r.slf = 0.5 + his/2; r.shu = hh * r.slf * 2; }
+    return r;
+  },
+  vicProvided({ha, gain, sbv}){
+    const glf = 0.5 + sbv/2; return { glf, ghu: ha * gain * glf };
+  },
+  nswRequired({ha, viNow, viFuture, brw}){
+    const dvi = Math.max(0, viNow - viFuture);
+    return { dvi, credits: dvi * ha * brw * 0.25 };
+  },
+  nswProvided({ha, viGain}){ return { credits: viGain * ha * 0.25 }; },
+  qldSliding(offsetArea){
+    if (offsetArea <= 100) return 1;
+    const bands = [[100,1],[1000,.75],[5000,.5],[10000,.25],[Infinity,.1]];
+    let prev = 0, sum = 0;
+    for (const [upper, pct] of bands){
+      const portion = Math.max(0, Math.min(offsetArea, upper) - prev);
+      sum += portion * pct; prev = upper;
+      if (offsetArea <= upper) break;
+    }
+    return sum / offsetArea;
+  },
+  qldFinancial({ha, mult, ogc, lipRate, koala}){
+    const offsetArea = ha * mult;
+    const ss = koala ? 1 : CALC.qldSliding(offsetArea);
+    const base = offsetArea * ogc;
+    const onGround = base * ss;
+    let lip = offsetArea * lipRate * ss; if (lip < 10000) lip = 10000;
+    let admin = base * 0.25 * ss;
+    if (ha > 2.5 && admin < 50000) admin = 50000;
+    if (admin > 1e6) admin = 1e6;
+    let total = onGround + lip + admin, capped = false;
+    if (koala){ const cap = 230000 * ha; if (total > cap){ total = cap; capped = true; } }
+    return { offsetArea, ss, onGround, lip, admin, total, capped };
+  },
+  saRequired({ha, ubs, rate}){ const tbs = ubs * ha; return { tbs, pay: rate ? tbs * rate : null }; },
+  genericRequired({ha, impactQ, startQ, futureQ, conf, margin}){
+    const impactQha = ha * impactQ / 10;
+    const gainHa = Math.max(0, (futureQ - startQ) / 10 * conf / 100);
+    const offsetHa = gainHa > 0 ? impactQha * (1 + margin/100) / gainHa : Infinity;
+    return { impactQha, gainHa, offsetHa, ratio: ha > 0 ? offsetHa / ha : 0 };
+  },
+  genericProvided({ha, impactQ, startQ, futureQ, conf, margin}){
+    const gainHa = Math.max(0, (futureQ - startQ) / 10 * conf / 100);
+    const gainQha = ha * gainHa;
+    const impactHa = impactQ > 0 ? gainQha / (impactQ/10) / (1 + margin/100) : 0;
+    return { gainHa, gainQha, impactHa };
+  },
+  auRate(rain, belt){
+    let r = rain < 350 ? 1.0 : rain < 500 ? 2.0 : rain < 650 ? 3.5 : rain < 800 ? 5.0 : 6.5;
+    return belt ? r * 1.3 : r;
+  },
+  auSeq({ha, rate, years, perm, price}){
+    const gross = ha * rate * years;
+    const deduct = perm === 25 ? 0.25 : 0.05;
+    const net = gross * (1 - deduct);
+    return { gross, deduct, net, value: net * price, perYr: ha * rate };
+  },
+  nzSeq({ha, type, price}){
+    const t = NZ_FOREST[type]; const units = ha * t.rate * t.age;
+    return { units, age: t.age, rate: t.rate, value: units * price, perYr: ha * t.rate };
+  },
+  clearing({ha, stockC, share, price}){
+    const t = ha * stockC * (share/100) * 44/12;
+    return { tco2: t, perHa: stockC * (share/100) * 44/12, value: t * price };
+  }
+};
+const NZ_FOREST = {
+  radiata:  { label:'Radiata pine (national average)', rate:20.1, age:16 },
+  hardwood: { label:'Exotic hardwoods (eucalypts, poplars etc.)', rate:26.7, age:12 },
+  indig:    { label:'Indigenous forest (incl. regenerating mānuka/kānuka)', rate:8.4, age:23 }
+};
+const VEG_AU = {
+  rain:   { label:'Rainforest & vine thicket', c:142 },
+  euc:    { label:'Eucalypt forest & woodland (national average)', c:65 },
+  mel:    { label:'Melaleuca forest & woodland', c:34 },
+  acacia: { label:'Acacia forest & woodland', c:26 },
+  mallee: { label:'Mallee woodland & shrubland', c:25 },
+  call:   { label:'Callitris / Casuarina forest & woodland', c:20 },
+  custom: { label:'Custom (enter site value)', c:null }
+};
+const VEG_NZ = {
+  tall:   { label:'Mature indigenous forest (above-ground only)', c:169 },
+  regen:  { label:'Regenerating mānuka/kānuka (~20 yrs)', c:53 },
+  pine:   { label:'Radiata plantation at long-term average', c:88 },
+  custom: { label:'Custom (enter site value)', c:null }
+};
+const PRICE = { AU:{ unit:'ACCU', cur:'A$', p:37.75 }, NZ:{ unit:'NZU', cur:'NZ$', p:49.5 } };
+const JNAME = { VIC:'Victoria', NSW:'New South Wales', QLD:'Queensland', SA:'South Australia', WA:'Western Australia', TAS:'Tasmania', NT:'Northern Territory', ACT:'Australian Capital Territory', NZ:'New Zealand' };
+const STATE_MAP = { 'Victoria':'VIC','New South Wales':'NSW','Queensland':'QLD','South Australia':'SA','Western Australia':'WA','Tasmania':'TAS','Northern Territory':'NT','Australian Capital Territory':'ACT','Jervis Bay Territory':'ACT' };
+
+/* =========================================================
+   STATE
+   ========================================================= */
+const S = {
+  ha: 0, centroid: null, detected: '', override: '', rain: null, rainAuto: null,
+  tab: 'bio', mode: { bio:'req', carb:'req' }, v: {}, epbcOpen: false, lastRows: []
+};
+const juris = () => S.override || (S.detected === 'OUT' ? '' : S.detected);
+const country = () => juris() === 'NZ' ? 'NZ' : (juris() ? 'AU' : '');
+const val = (k, d) => (S.v[k] === undefined || S.v[k] === '' ? d : S.v[k]);
+const num = (k, d) => { const x = parseFloat(val(k, d)); return isFinite(x) ? x : d; };
+
+/* formatting */
+const nf = (x, d=1) => isFinite(x) ? x.toLocaleString('en-AU', { minimumFractionDigits:d, maximumFractionDigits:d }) : '—';
+const nf0 = x => nf(x, 0);
+const money = (x, cur) => isFinite(x) && x !== null ? cur + Math.round(x).toLocaleString('en-AU') : '—';
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+/* form helpers */
+function field(id, label, def, opts={}){
+  const v = val(id, def);
+  if (opts.select){
+    const o = opts.select.map(([k,t]) => `<option value="${esc(k)}" ${String(v)===String(k)?'selected':''}>${esc(t)}</option>`).join('');
+    return `<div class="f ${opts.full?'full':''}"><label for="${id}">${label}</label><select id="${id}" data-k="${id}">${o}</select>${opts.h?`<span class="h">${opts.h}</span>`:''}</div>`;
+  }
+  const attrs = `type="number" ${opts.min!==undefined?`min="${opts.min}"`:''} ${opts.max!==undefined?`max="${opts.max}"`:''} step="${opts.step||'any'}"`;
+  return `<div class="f ${opts.full?'full':''}"><label for="${id}">${label}</label><input id="${id}" data-k="${id}" ${attrs} value="${esc(v)}" ${opts.ph?`placeholder="${esc(opts.ph)}"`:''}>${opts.h?`<span class="h">${opts.h}</span>`:''}</div>`;
+}
+function check(id, label, def){
+  const v = val(id, def);
+  return `<label class="chk"><input type="checkbox" id="${id}" data-k="${id}" ${v ? 'checked':''}> <span>${label}</span></label>`;
+}
+function out(big, bigl, rows){
+  return `<div class="out"><div class="big">${big}</div><div class="bigl">${bigl}</div>${rows.map(([a,b]) => `<div class="row"><span>${a}</span><span>${b}</span></div>`).join('')}</div>`;
+}
+const note = (t, warn) => `<div class="note ${warn?'warn':''}">${t}</div>`;
+const seg = tab => `<div class="seg" role="group" aria-label="Direction">
+  <button data-mode="req" aria-pressed="${S.mode[tab]==='req'}">${tab==='bio' ? 'Offset required (clearing)' : 'Emissions from clearing'}</button>
+  <button data-mode="prov" aria-pressed="${S.mode[tab]==='prov'}">${tab==='bio' ? 'Offset provided (offset site)' : 'Sequestration from planting'}</button></div>`;
+
+/* =========================================================
+   RENDER — BIODIVERSITY
+   ========================================================= */
+function rows(arr){ S.lastRows = arr; }
+function bioBody(){
+  const j = juris(), req = S.mode.bio === 'req', ha = S.ha;
+  let html = seg('bio'), res = '', r, recs = [];
+  const label = JNAME[j];
+  recs.push(['Jurisdiction', label], ['Area (ha)', nf(ha, 2)], ['Direction', req ? 'Offset required' : 'Offset provided']);
+
+  if (j === 'VIC'){
+    html += `<p class="method"><b>Victoria</b> · native vegetation removal guidelines (habitat units)</p>`;
+    if (req){
+      html += `<div class="fields">
+        ${field('vic_cond','Condition score (0–1)',0.5,{min:0,max:1,step:0.01,h:'Habitat score ÷ 100, or the modelled condition in NatureKit.'})}
+        ${field('vic_sbv','Strategic biodiversity value (0–1)',0.5,{min:0,max:1,step:0.01,h:'From the SBV map in NatureKit / NVR Map.'})}
+        ${check('vic_sp','Site is mapped habitat for a rare or threatened species (species offset)',false)}
+        ${val('vic_sp',false) ? field('vic_his','Habitat importance score (0–1)',0.5,{min:0,max:1,step:0.01}) : ''}
+        ${field('vic_price','Credit price per GHU (A$)','',{min:0,step:1000,ph:'Broker quote',h:'Varies widely by catchment. A recent Port Phillip & Westernport quote worked out at roughly $150k–$185k per GHU.'})}
+      </div>`;
+      r = CALC.vicRequired({ ha, condition:num('vic_cond',.5), sbv:num('vic_sbv',.5), species:val('vic_sp',false), his:num('vic_his',.5) });
+      const price = num('vic_price', NaN);
+      const rr = [['Habitat hectares', nf(r.hh,3)], ['General landscape factor', nf(r.glf,2)], ['Minimum SBV of offset', nf(r.minSbv,2)]];
+      if (r.shu !== undefined) rr.push(['Species habitat units', nf(r.shu,3)]);
+      if (isFinite(price)) rr.push(['Indicative credit cost (general)', money(r.ghu*price,'A$')]);
+      res = out(nf(r.ghu,3), 'General habitat units (GHU) to offset', rr);
+      res += note('Large trees must also be offset (counted separately in the NVR report). If species habitat is significantly impacted, a species offset replaces the general offset for that zone. Get the official <a href="https://nvrmap.mapshare.vic.gov.au/" target="_blank" rel="noopener">NVR Map</a> report before relying on this.');
+      recs.push(['Condition', num('vic_cond',.5)], ['SBV', num('vic_sbv',.5)], ['Habitat hectares', r.hh], ['General habitat units', r.ghu]);
+      if (r.shu !== undefined) recs.push(['Species habitat units', r.shu]);
+      if (isFinite(price)) recs.push(['Indicative cost (A$)', r.ghu*price]);
+    } else {
+      html += `<div class="fields">
+        ${field('vic_gain','Gain score per hectare',0.15,{min:0,max:1,step:0.01,h:'Assumption. Remnant sites protected on title with management commonly score in the order of 0.1–0.3; a gain scoring assessment sets the real value.'})}
+        ${field('vic_osbv','Strategic biodiversity value (0–1)',0.5,{min:0,max:1,step:0.01})}
+        ${field('vic_oprice','Credit price per GHU (A$)','',{min:0,step:1000,ph:'Optional'})}
+      </div>`;
+      r = CALC.vicProvided({ ha, gain:num('vic_gain',.15), sbv:num('vic_osbv',.5) });
+      const price = num('vic_oprice', NaN);
+      const rr = [['General landscape factor', nf(r.glf,2)], ['Site gain (habitat ha)', nf(ha*num('vic_gain',.15),3)]];
+      if (isFinite(price)) rr.push(['Indicative credit value', money(r.ghu*price,'A$')]);
+      res = out(nf(r.ghu,3), 'General habitat units the site could generate', rr);
+      res += note('Requires a 10-year management plan, a security agreement on title and registration on the Native Vegetation Credit Register.');
+      recs.push(['Gain score/ha', num('vic_gain',.15)], ['SBV', num('vic_osbv',.5)], ['GHU generated', r.ghu]);
+    }
+  }
+  else if (j === 'NSW'){
+    html += `<p class="method"><b>New South Wales</b> · Biodiversity Offsets Scheme, BAM 2020 ecosystem credits</p>`;
+    if (req){
+      html += `<div class="fields">
+        ${field('nsw_vi','Current vegetation integrity score (0–100)',50,{min:0,max:100,step:1})}
+        ${field('nsw_vif','Future VI score after impact',0,{min:0,max:100,step:1,h:'0 for full clearing.'})}
+        ${field('nsw_brw','Biodiversity risk weighting',2,{min:1,max:3,step:0.25,h:'1–3, set by the PCT/TEC in BAM-C. Higher for threatened communities.'})}
+        ${field('nsw_price','Price per ecosystem credit (A$)','',{min:0,step:100,ph:'Optional',h:'Highly variable by PCT and region; check the Biodiversity Credits Market Sales Dashboard.'})}
+      </div>`;
+      r = CALC.nswRequired({ ha, viNow:num('nsw_vi',50), viFuture:num('nsw_vif',0), brw:num('nsw_brw',2) });
+      const price = num('nsw_price', NaN);
+      const rr = [['Change in VI', nf(r.dvi,1)], ['Risk weighting', nf(num('nsw_brw',2),2)]];
+      if (isFinite(price)) rr.push(['Indicative credit cost', money(Math.ceil(r.credits)*price,'A$')]);
+      res = out(nf0(Math.ceil(r.credits)), 'Ecosystem credits required (rounded up)', rr);
+      if (num('nsw_vi',50) < 20) res += note('Low VI scores may fall below the BAM thresholds at which no ecosystem credits are required (thresholds depend on the community\'s threat status). Check BAM s9.2.1.', true);
+      res += note('Species credits, hollow-bearing tree credits and serious and irreversible impacts are assessed separately in BAM-C. Entry to the scheme depends on the area-clearing threshold and Biodiversity Values Map.');
+      recs.push(['Current VI', num('nsw_vi',50)], ['Future VI', num('nsw_vif',0)], ['BRW', num('nsw_brw',2)], ['Ecosystem credits', r.credits]);
+    } else {
+      html += `<div class="fields">
+        ${field('nsw_gain','Predicted VI gain from management',20,{min:0,max:100,step:1,h:'Assumption. BAM-C predicts gain from averted loss and management or restoration over 20 years.'})}
+        ${field('nsw_oprice','Price per ecosystem credit (A$)','',{min:0,step:100,ph:'Optional'})}
+      </div>`;
+      r = CALC.nswProvided({ ha, viGain:num('nsw_gain',20) });
+      const price = num('nsw_oprice', NaN);
+      res = out(nf0(Math.floor(r.credits)), 'Ecosystem credits a stewardship site could create', isFinite(price)?[['Indicative credit value', money(Math.floor(r.credits)*price,'A$')]]:[]);
+      res += note('Excludes security benefit and species credits. A Biodiversity Stewardship Agreement and Total Fund Deposit are required.');
+      recs.push(['VI gain', num('nsw_gain',20)], ['Ecosystem credits created', r.credits]);
+    }
+  }
+  else if (j === 'QLD'){
+    html += `<p class="method"><b>Queensland</b> · Environmental Offsets Policy v1.15, financial settlement methodology</p>`;
+    if (req){
+      html += `<div class="fields">
+        ${field('qld_mult','Matter multiplier',4,{select:[[1,'1 (connectivity, fish passage)'],[2,'2'],[3,'3 (e.g. koala bushland habitat)'],[4,'4 (most regional ecosystems & threatened species)']],h:'From the policy data tables for the impacted matter.'})}
+        ${field('qld_ogc','On-ground cost per ha (A$)',20000,{min:0,step:500,h:'Assumption: the policy\'s worked example uses $20,000. Use the subregion value in Appendix 4.5.4.'})}
+        ${field('qld_lip','Land value or 20-yr productivity loss per ha (A$)',3000,{min:0,step:100,full:true,h:'SEQ, CQC and Wet Tropics bioregions: LGA unimproved value per ha. Elsewhere: subregion 20-year productivity loss per ha. Assumption.'})}
+        ${check('qld_koala','Koala habitat in South East Queensland (no sliding scale; $230,000 per impact ha cap)',false)}
+      </div>`;
+      r = CALC.qldFinancial({ ha, mult:num('qld_mult',4), ogc:num('qld_ogc',20000), lipRate:num('qld_lip',3000), koala:val('qld_koala',false) });
+      res = out(money(r.total,'A$'), 'Indicative financial settlement offset', [
+        ['Offset area (impact × multiplier)', nf(r.offsetArea,2)+' ha'],
+        ['Sliding scale', nf(r.ss*100,0)+'%'],
+        ['On-ground cost', money(r.onGround,'A$')],
+        ['Landholder incentive payment', money(r.lip,'A$')],
+        ['Administrative cost', money(r.admin,'A$')]
+      ]);
+      if (r.capped) res += note('Capped at $230,000 per impact hectare for SEQ koala habitat.', true);
+      res += note('A land-based (proponent-driven) offset instead needs a habitat quality assessment; its size is capped at 4× the impact area. Confirm with the <a href="https://apps.des.qld.gov.au/offsets-calculator/" target="_blank" rel="noopener">DETSI offsets calculator</a>. Queensland\'s offsets framework is being reviewed in 2026.');
+      recs.push(['Multiplier', num('qld_mult',4)], ['On-ground cost/ha', num('qld_ogc',20000)], ['LIP rate/ha', num('qld_lip',3000)], ['Offset area (ha)', r.offsetArea], ['Financial settlement (A$)', r.total]);
+    } else {
+      html += `<div class="fields">${field('qld_omult','Multiplier of the matter you would offset',4,{select:[[1,'1'],[2,'2'],[3,'3'],[4,'4']]})}</div>`;
+      const m = num('qld_omult',4);
+      res = out(nf(ha/m,2)+' ha', 'Impact area this site could counterbalance (upper bound)', [['Offset site area', nf(ha,2)+' ha'], ['Multiplier', m]]);
+      res += note('Actual offset value depends on a habitat quality assessment comparing the impact and offset sites. The site must be legally secured for the duration of the impact.');
+      recs.push(['Multiplier', m], ['Impact area counterbalanced (ha)', ha/m]);
+    }
+  }
+  else if (j === 'SA'){
+    html += `<p class="method"><b>South Australia</b> · Native Vegetation Act, Significant Environmental Benefit (SEB)</p>`;
+    if (req){
+      html += `<div class="fields">
+        ${field('sa_ubs','Unit biodiversity score (per ha)',30,{min:0,step:0.1,h:'Assumption. Vegetation condition × landscape context × conservation significance, from a Bushland or Rangeland Assessment.'})}
+        ${field('sa_rate','Payment per SEB point (A$)','',{min:0,step:10,ph:'Set by the NVC',h:'Set by the Native Vegetation Council; check the current rate.'})}
+      </div>`;
+      r = CALC.saRequired({ ha, ubs:num('sa_ubs',30), rate:num('sa_rate',0) });
+      res = out(nf(r.tbs,1), 'Total biodiversity score (basis of SEB points)', r.pay ? [['Indicative SEB payment', money(r.pay,'A$')]] : []);
+      res += note('The NVC converts this into SEB points and may apply adjustments. An SEB can be met on-ground, with SEB credit, or by payment into the Native Vegetation Fund.');
+      recs.push(['UBS', num('sa_ubs',30)], ['Total biodiversity score', r.tbs]);
+      if (r.pay) recs.push(['SEB payment (A$)', r.pay]);
+    } else {
+      html += `<div class="fields">
+        ${field('sa_pts','SEB points of gain (from assessment)','',{min:0,step:0.01,ph:'Assessor result'})}
+        ${field('sa_orate','Value per SEB point (A$)','',{min:0,step:10,ph:'Optional'})}
+      </div>`;
+      const p = num('sa_pts', NaN), rt = num('sa_orate', NaN);
+      res = out(isFinite(p) ? nf(p,2) : '—', 'SEB points the site could provide', isFinite(p)&&isFinite(rt) ? [['Indicative value', money(p*rt,'A$')]] : []);
+      res += note('SEB credit is generated by protecting and improving native vegetation under an NVC-approved management plan; points come from an accredited consultant\'s Bushland Assessment. SEB areas have minimum size requirements.');
+      if (isFinite(p)) recs.push(['SEB points', p]);
+    }
+  }
+  else if (j){
+    const isNZ = j === 'NZ';
+    html += `<p class="method"><b>${esc(label)}</b> · ${isNZ ? 'NPS-IB offsetting principles (net gain); transition to the Natural Environment Act' : 'case-by-case offsets policy'} · quality-hectare method</p>`;
+    html += genericForm('g', !req, isNZ);
+    const g = genericVals('g', isNZ);
+    if (req){
+      r = CALC.genericRequired({ ha, ...g });
+      res = out(isFinite(r.offsetHa) ? nf(r.offsetHa,1)+' ha' : 'n/a', 'Offset site area needed', [
+        ['Impact (quality-hectares)', nf(r.impactQha,2)], ['Gain per offset hectare', nf(r.gainHa,3)], ['Offset ratio', isFinite(r.ratio) ? nf(r.ratio,1)+' : 1' : '—']]);
+      if (!isFinite(r.offsetHa)) res += note('The offset site needs a quality gain above zero.', true);
+      recs.push(['Impact quality', g.impactQ], ['Offset start quality', g.startQ], ['Offset future quality', g.futureQ], ['Confidence %', g.conf], ['Net gain margin %', g.margin], ['Offset area needed (ha)', r.offsetHa]);
+    } else {
+      r = CALC.genericProvided({ ha, ...g });
+      res = out(nf(r.impactHa,2)+' ha', `Impact area (quality ${g.impactQ}/10) this site could offset`, [['Gain (quality-hectares)', nf(r.gainQha,2)], ['Gain per hectare', nf(r.gainHa,3)]]);
+      recs.push(['Offset start quality', g.startQ], ['Offset future quality', g.futureQ], ['Confidence %', g.conf], ['Impact area offset (ha)', r.impactHa]);
+    }
+    res += note(stateNote(j));
+  }
+
+  // EPBC card for Australia
+  let epbc = '';
+  if (j && j !== 'NZ'){
+    const g = genericVals('e', false);
+    const r2 = req ? CALC.genericRequired({ ha, ...g }) : CALC.genericProvided({ ha, ...g });
+    epbc = `<details class="card" id="epbcCard" ${S.epbcOpen?'open':''}><summary>Federal: EPBC Act matters (MNES) <span class="badge">If referred</span></summary><div class="inner">
+      <p class="method">Applies only where a residual significant impact on a matter of national environmental significance is approved. Since 19 August 2026 offsets must meet the National Environmental Standard for Environmental Offsets (net gain), delivered as an offset or a restoration contribution charge.</p>
+      ${genericForm('e', !req, false)}
+      ${req ? out(isFinite(r2.offsetHa) ? nf(r2.offsetHa,1)+' ha' : 'n/a', 'EPBC offset area (quality-hectare screening)', [['Offset ratio', isFinite(r2.ratio)?nf(r2.ratio,1)+' : 1':'—']])
+            : out(nf(r2.impactHa,2)+' ha', 'MNES impact area this site could offset', [['Gain (quality-hectares)', nf(r2.gainQha,2)]])}
+      ${note('The restoration contribution charge method was out for consultation until 14 October 2026 and is not calculated here.')}
+    </div></details>`;
+    if (req) recs.push(['EPBC offset area (ha)', r2.offsetHa]); else recs.push(['EPBC impact offset (ha)', r2.impactHa]);
+  }
+  rows(recs);
+  return html + res + epbc;
+}
+function genericForm(p, prov, isNZ){
+  return `<div class="fields">
+    ${field(p+'_iq', prov ? 'Quality of impacts you would offset (0–10)' : 'Habitat quality at impact site (0–10)', 6, {min:0,max:10,step:0.5})}
+    ${field(p+'_sq','Offset site current quality (0–10)',4,{min:0,max:10,step:0.5})}
+    ${field(p+'_fq','Offset site quality with management (0–10)',6,{min:0,max:10,step:0.5,h:'Assumption: expected after the management period.'})}
+    ${field(p+'_cf','Confidence of success (%)',80,{min:0,max:100,step:5})}
+    ${field(p+'_mg','Net-gain margin (%)',isNZ?10:0,{min:0,max:100,step:5,full:true,h:isNZ?'NPS-IB requires a net gain but sets no fixed margin. Assumption.':'Extra over like-for-like to reach net gain. Assumption.'})}
+  </div>`;
+}
+function genericVals(p, isNZ){
+  return { impactQ:num(p+'_iq',6), startQ:num(p+'_sq',4), futureQ:num(p+'_fq',6), conf:num(p+'_cf',80), margin:num(p+'_mg', isNZ?10:0) };
+}
+function stateNote(j){
+  return ({
+    WA: 'WA applies the WA Environmental Offsets Policy and Guidelines case by case; native vegetation clearing permits (EP Act) and EPA assessments set offsets, often using the EPBC-style calculator.',
+    TAS: 'Tasmania has no statewide offset metric; offsets arise through the Forest Practices system, planning permits, the Threatened Species Protection Act and EPBC conditions.',
+    NT: 'The NT sets offsets under the Environment Protection Act 2019 and the NT Environmental Offsets Policy, case by case.',
+    ACT: 'The ACT Environmental Offsets Policy generally uses the EPBC offsets calculator approach; check with the Conservator and EPSDD.',
+    NZ: 'Offsets in NZ are consent conditions set by councils. Offsetting is not available for some highly vulnerable or irreplaceable biodiversity (NPS-IB Appendix 3), where compensation may apply instead.'
+  })[j] || '';
+}
+
+/* =========================================================
+   RENDER — CARBON
+   ========================================================= */
+function carbBody(){
+  const j = juris(), c = country(), req = S.mode.carb === 'req', ha = S.ha;
+  const P = PRICE[c];
+  let html = seg('carb'), res = '', recs = [['Jurisdiction', JNAME[j]], ['Area (ha)', nf(ha,2)], ['Direction', req ? 'Clearing emissions' : 'Sequestration']];
+  const priceK = c === 'NZ' ? 'nzu_price' : 'accu_price';
+  if (req){
+    const VEG = c === 'NZ' ? VEG_NZ : VEG_AU;
+    const vk = val('veg_'+c, c==='NZ'?'tall':'euc');
+    const preset = VEG[vk] ? VEG[vk].c : null;
+    html += `<p class="method"><b>Emissions from clearing</b> · live biomass carbon × area × 44/12</p><div class="fields">
+      ${field('veg_'+c,'Vegetation type',vk,{select:Object.entries(VEG).map(([k,o]) => [k, o.label + (o.c ? ` (~${o.c} t C/ha)` : '')]), full:true})}
+      ${vk === 'custom' ? field('veg_c','Live biomass carbon (t C/ha)',60,{min:0,step:1,h:'From a site biomass survey or FullCAM.'}) : ''}
+      ${field('veg_share','Share of biomass removed (%)',100,{min:0,max:100,step:5})}
+      ${field(priceK, P.unit+' price ('+P.cur+')', P.p, {min:0,step:0.25})}
+    </div>`;
+    const stock = vk === 'custom' ? num('veg_c',60) : preset;
+    const r = CALC.clearing({ ha, stockC:stock, share:num('veg_share',100), price:num(priceK,P.p) });
+    res = out(nf0(r.tco2)+' t CO₂-e', 'Biomass emissions from clearing', [
+      ['Per hectare', nf(r.perHa,0)+' t CO₂-e'], [`${P.unit}s to offset`, nf0(Math.ceil(r.tco2))], [`Cost at ${P.cur}${nf(num(priceK,P.p),2)}`, money(r.value,P.cur)]]);
+    res += note(c === 'NZ'
+      ? 'Deforesting pre-1990 forest land or registered post-1989 forest creates an ETS surrender liability under its own tables; this estimate is a biomass-based approximation. Soil carbon excluded.'
+      : 'National average stocks; real sites can be several times higher or lower (tall wet forests far higher). Soil carbon excluded. Use for scoping only.');
+    recs.push(['Vegetation', VEG[vk].label], ['Carbon stock (t C/ha)', stock], ['Share removed %', num('veg_share',100)], ['Emissions (t CO2-e)', r.tco2], [P.unit+' price', num(priceK,P.p)], ['Offset cost ('+P.cur+')', r.value]);
+  } else if (c === 'NZ'){
+    const t = val('nz_type','radiata');
+    html += `<p class="method"><b>NZ ETS</b> · post-1989 forest, averaging accounting, standard carbon tables</p><div class="fields">
+      ${field('nz_type','Forest type',t,{select:Object.entries(NZ_FOREST).map(([k,o]) => [k,o.label]), full:true})}
+      ${field(priceK, 'NZU price (NZ$)', P.p, {min:0,step:0.25})}
+    </div>`;
+    const r = CALC.nzSeq({ ha, type:t, price:num(priceK,P.p) });
+    res = out(nf0(r.units)+' NZUs', `Earned to the average age (${r.age} years)`, [
+      ['Average annual removals', nf0(r.perYr)+' t CO₂/yr'], ['Indicative value', money(r.value,'NZ$')]]);
+    res += note('Eligible land must have been non-forest at 31 Dec 1989; forest must be ≥1 ha, ≥30 m wide, reach 30% canopy and 5 m height. Over 100 ha registered requires field measurement. ETS forestry settings are a live political issue in 2026.');
+    if (S.ha && S.ha < 1) res += note('Area is under the 1 ha minimum for ETS forest land.', true);
+    recs.push(['Forest type', NZ_FOREST[t].label], ['NZUs to average age', r.units], ['NZU price', num(priceK,P.p)], ['Value (NZ$)', r.value]);
+  } else {
+    const rain = S.rain;
+    const belt = val('au_belt', false);
+    const auto = rain ? CALC.auRate(rain, belt) : null;
+    html += `<p class="method"><b>Australia</b> · mixed-species environmental planting, indicative FullCAM-based rates</p><div class="fields">
+      ${check('au_belt','Planted in narrow belts (&lt;40 m wide)',false)}
+      ${field('au_rate','Sequestration rate (t CO₂-e/ha/yr)', auto ? auto.toFixed(1) : '', {min:0,step:0.1,h: auto ? `Auto from ${nf0(rain)} mm rainfall. Override with a FullCAM result.` : 'Enter rainfall above, or a FullCAM rate.'})}
+      ${field('au_years','Project period (years)',25,{min:1,max:100,step:1})}
+      ${field('au_perm','Permanence period',100,{select:[[100,'100 years (5% buffer)'],[25,'25 years (5% buffer + 20%)']]})}
+      ${field(priceK,'ACCU price (A$)',P.p,{min:0,step:0.25})}
+    </div>`;
+    const rate = num('au_rate', auto || NaN);
+    if (isFinite(rate)){
+      const r = CALC.auSeq({ ha, rate, years:num('au_years',25), perm:num('au_perm',100), price:num(priceK,P.p) });
+      res = out(nf0(r.net)+' ACCUs', `Over ${num('au_years',25)} years after deductions`, [
+        ['Gross sequestration', nf0(r.gross)+' t CO₂-e'], ['Annual average', nf(r.perYr,1)+' t CO₂-e/yr'],
+        ['Deductions', nf0(r.deduct*100)+'%'], ['Indicative value', money(r.value,'A$')]]);
+      recs.push(['Rainfall (mm)', rain||''], ['Rate (t/ha/yr)', rate], ['Years', num('au_years',25)], ['Permanence', num('au_perm',100)], ['ACCUs (net)', r.net], ['ACCU price', num(priceK,P.p)], ['Value (A$)', r.value]);
+    } else {
+      res = `<div class="empty">Enter mean annual rainfall or a sequestration rate to estimate ACCUs.</div>`;
+    }
+    res += note('Under the Reforestation by Environmental or Mallee Plantings FullCAM method the land must have been clear of forest for 5+ years. Rates are 25-year averages: young plantings sequester fastest and growth tapers with age.');
+  }
+  rows(recs);
+  return html + res;
+}
+
+/* =========================================================
+   RENDER — SHELL
+   ========================================================= */
+const bodyEl = document.getElementById('body');
+function render(){
+  const j = juris();
+  document.getElementById('csvBtn').disabled = !(S.ha > 0 && j);
+  document.getElementById('gjBtn').disabled = !(S.ha > 0);
+  if (!S.ha){
+    bodyEl.innerHTML = `<div class="empty"><b>Draw your site to begin</b>Use <i>Draw area</i> on the map (or import a GeoJSON boundary). The area, jurisdiction and rainfall fill in automatically.</div>`;
+    S.lastRows = []; return;
+  }
+  if (!j){
+    bodyEl.innerHTML = `<div class="empty"><b>${S.detected === 'OUT' ? 'Outside Australia and New Zealand' : 'Finding the jurisdiction…'}</b>${S.detected === 'OUT' ? 'This tool covers Australian states and territories and New Zealand. Pick one above to use its method anyway.' : 'You can also choose it above.'}</div>`;
+    S.lastRows = []; return;
+  }
+  const focusId = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.k : null;
+  bodyEl.innerHTML = S.tab === 'bio' ? bioBody() : carbBody();
+  if (focusId){ const el = document.getElementById(focusId); if (el){ el.focus(); } }
+}
+
+bodyEl.addEventListener('input', e => {
+  const k = e.target.dataset.k; if (!k || e.target.type === 'checkbox' || e.target.tagName === 'SELECT') return;
+  S.v[k] = e.target.value; renderSoon();
+});
+bodyEl.addEventListener('change', e => {
+  const k = e.target.dataset.k; if (!k) return;
+  S.v[k] = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
+  if (k === 'au_belt') delete S.v.au_rate;
+  render();
+});
+bodyEl.addEventListener('click', e => {
+  const b = e.target.closest('[data-mode]'); if (b){ S.mode[S.tab] = b.dataset.mode; render(); }
+});
+bodyEl.addEventListener('toggle', e => { if (e.target.id === 'epbcCard') S.epbcOpen = e.target.open; }, true);
+let rt; function renderSoon(){ clearTimeout(rt); rt = setTimeout(render, 250); }
+
+document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => {
+  S.tab = t.dataset.tab;
+  document.querySelectorAll('.tab').forEach(x => x.setAttribute('aria-selected', x === t));
+  render();
+}));
+document.getElementById('jurSel').addEventListener('change', e => { S.override = e.target.value; updateJurLabel(); render(); });
+document.getElementById('rainIn').addEventListener('input', e => {
+  const x = parseFloat(e.target.value); S.rain = isFinite(x) ? x : null;
+  document.getElementById('rainS').textContent = S.rain === S.rainAuto ? 'Auto-filled from ERA5 (2016–2025)' : 'Your value';
+  delete S.v.au_rate; renderSoon();
+});
+function updateJurLabel(){
+  const el = document.getElementById('jurS');
+  if (S.override) el.textContent = 'Set manually';
+  else if (S.detected === 'OUT') el.textContent = 'Outside AU/NZ';
+  else if (S.detected) el.textContent = 'Detected: ' + JNAME[S.detected];
+  else el.textContent = S.ha ? 'Detecting…' : 'Draw an area to detect';
+}
+
+/* =========================================================
+   MAP
+   ========================================================= */
+const map = L.map('map', { zoomControl:true }).setView([-30, 148], 4);
+const imagery = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom:19, attribution:'Imagery © Esri, Maxar, Earthstar Geographics' });
+const streets = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom:19, attribution:'© OpenStreetMap contributors' });
+imagery.addTo(map);
+let onImagery = true;
+document.getElementById('baseBtn').onclick = () => {
+  if (onImagery){ map.removeLayer(imagery); streets.addTo(map); } else { map.removeLayer(streets); imagery.addTo(map); }
+  onImagery = !onImagery; document.getElementById('baseBtn').textContent = onImagery ? 'Street map' : 'Imagery';
+};
+const shapes = L.featureGroup().addTo(map);
+const STYLE = { color:'#c9f27a', weight:3, fillColor:'#8fdc6a', fillOpacity:.25 };
+map.pm.setGlobalOptions({ pathOptions: STYLE, snappable:true, allowSelfIntersection:false });
+map.pm.addControls({ position:'topleft', drawMarker:false, drawCircleMarker:false, drawPolyline:false, drawText:false, drawCircle:false, cutPolygon:false, rotateMode:false, dragMode:false, drawRectangle:true, drawPolygon:true, editMode:true, removalMode:true });
+map.pm.setLang('en');
+document.getElementById('drawBtn').onclick = () => { map.pm.enableDraw('Polygon', { pathOptions: STYLE }); hint('Click each corner of the site. <b>Click the first point</b> to finish.'); };
+document.getElementById('clearBtn').onclick = () => { shapes.clearLayers(); onShapes(); };
+map.on('pm:create', e => { e.layer.setStyle && e.layer.setStyle(STYLE); shapes.addLayer(e.layer); wire(e.layer); onShapes(); });
+map.on('pm:remove', e => { shapes.removeLayer(e.layer); onShapes(); });
+function wire(layer){ layer.on('pm:edit pm:update pm:dragend', onShapes); }
+function hint(h){ const el = document.getElementById('maphint'); el.innerHTML = h; el.style.display = h ? '' : 'none'; }
+
+function featureCollection(){
+  const feats = [];
+  shapes.eachLayer(l => { const g = l.toGeoJSON(); if (g.type === 'FeatureCollection') feats.push(...g.features); else feats.push(g); });
+  return { type:'FeatureCollection', features: feats.filter(f => f.geometry && /Polygon/.test(f.geometry.type)) };
+}
+let lookupSeq = 0;
+function onShapes(){
+  const fc = featureCollection();
+  const m2 = fc.features.reduce((s, f) => s + turf.area(f), 0);
+  S.ha = m2 / 10000;
+  document.getElementById('areaV').textContent = S.ha ? (S.ha >= 100 ? nf0(S.ha) : nf(S.ha, 2)) + ' ha' : '—';
+  document.getElementById('areaS').textContent = S.ha ? `${nf0(m2)} m² · ${fc.features.length} polygon${fc.features.length===1?'':'s'}` : 'No area drawn';
+  if (!S.ha){
+    S.centroid = null; S.detected = ''; document.getElementById('ctrV').textContent = '—'; document.getElementById('ctrS').innerHTML = '&nbsp;';
+    hint('<b>Start:</b> search a location, then click <b>Draw area</b> and click around the site boundary.');
+    updateJurLabel(); render(); return;
+  }
+  hint('');
+  const c = turf.centroid(fc).geometry.coordinates;
+  const moved = !S.centroid || Math.abs(S.centroid[0]-c[0]) > 0.02 || Math.abs(S.centroid[1]-c[1]) > 0.02;
+  S.centroid = c;
+  document.getElementById('ctrV').textContent = `${c[1].toFixed(4)}, ${c[0].toFixed(4)}`;
+  render();
+  if (moved){ const seq = ++lookupSeq; S.detected = S.detected || ''; updateJurLabel(); lookup(c, seq); }
+}
+async function lookup([lon, lat], seq){
+  // jurisdiction
+  try {
+    const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=8&addressdetails=1&lat=${lat}&lon=${lon}`, { headers:{ 'Accept-Language':'en' } });
+    const d = await r.json(); if (seq !== lookupSeq) return;
+    const a = d.address || {}, cc = (a.country_code || '').toLowerCase();
+    S.detected = cc === 'nz' ? 'NZ' : cc === 'au' ? (STATE_MAP[a.state] || STATE_MAP[a.territory] || '') : 'OUT';
+    if (cc === 'au' && !S.detected) S.detected = guessState(lat, lon);
+    document.getElementById('ctrS').textContent = [a.county || a.city || a.town || a.municipality || a.region, a.state].filter(Boolean).join(', ') || d.display_name || '';
+  } catch(err){
+    if (seq !== lookupSeq) return;
+    S.detected = guessState(lat, lon);
+    document.getElementById('ctrS').textContent = 'Lookup unavailable — check jurisdiction';
+  }
+  updateJurLabel(); render();
+  // rainfall
+  try {
+    const u = `https://archive-api.open-meteo.com/v1/archive?latitude=${lat.toFixed(3)}&longitude=${lon.toFixed(3)}&start_date=2016-01-01&end_date=2025-12-31&daily=precipitation_sum&timezone=UTC`;
+    const d = await (await fetch(u)).json(); if (seq !== lookupSeq) return;
+    const arr = (d.daily && d.daily.precipitation_sum || []).filter(x => x !== null);
+    if (arr.length > 3000){
+      const mm = Math.round(arr.reduce((s,x) => s+x, 0) / (arr.length / 365.25) / 10) * 10;
+      S.rainAuto = mm; S.rain = mm; delete S.v.au_rate;
+      document.getElementById('rainIn').value = mm;
+      document.getElementById('rainS').textContent = 'Auto-filled from ERA5 (2016–2025)';
+      render();
+    }
+  } catch(err){ document.getElementById('rainS').textContent = 'Auto lookup failed — enter BoM figure'; }
+}
+// rough fallback if reverse geocoding fails (bounding boxes; border areas may be wrong)
+function guessState(lat, lon){
+  if (lon > 165 && lat < -33) return 'NZ';
+  if (lon < 112 || lon > 155 || lat > -9 || lat < -44) return 'OUT';
+  if (lat < -39.5 && lon > 143) return 'TAS';
+  if (lon < 129) return 'WA';
+  if (lon < 138) return lat > -26 ? 'NT' : 'SA';
+  if (lat > -29 && lon < 141) return 'QLD';
+  if (lat > -29) return 'QLD';
+  if (lon < 141) return 'SA';
+  if (lat < -36 && lon < 150 && (lat < -37.5 || lon < 148)) return 'VIC';
+  return 'NSW';
+}
+
+/* search */
+const qEl = document.getElementById('q'), resEl = document.getElementById('searchResults');
+document.getElementById('searchForm').addEventListener('submit', async e => {
+  e.preventDefault(); const q = qEl.value.trim(); if (!q) return;
+  resEl.style.display = 'block'; resEl.innerHTML = '<button type="button" disabled>Searching…</button>';
+  try {
+    const d = await (await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=6&countrycodes=au,nz&q=${encodeURIComponent(q)}`, { headers:{ 'Accept-Language':'en' } })).json();
+    resEl.innerHTML = d.length ? d.map((x,i) => `<button type="button" data-i="${i}">${esc(x.display_name)}</button>`).join('') : '<button type="button" disabled>No results in Australia or New Zealand</button>';
+    resEl.onclick = ev => { const b = ev.target.closest('[data-i]'); if (!b) return; const x = d[+b.dataset.i];
+      if (x.boundingbox){ const bb = x.boundingbox.map(Number); map.fitBounds([[bb[0],bb[2]],[bb[1],bb[3]]], { maxZoom:16 }); } else map.setView([+x.lat, +x.lon], 15);
+      resEl.style.display = 'none'; };
+  } catch(err){ resEl.innerHTML = '<button type="button" disabled>Search unavailable</button>'; }
+});
+document.addEventListener('click', e => { if (!e.target.closest('#searchForm')) resEl.style.display = 'none'; });
+
+/* GeoJSON import */
+document.getElementById('geoFile').addEventListener('change', async e => {
+  const f = e.target.files[0]; if (!f) return;
+  try {
+    const gj = JSON.parse(await f.text());
+    const layer = L.geoJSON(gj, { style: STYLE, filter: ft => ft.geometry && /Polygon/.test(ft.geometry.type) });
+    let n = 0;
+    layer.eachLayer(l => { shapes.addLayer(l); wire(l); n++; });
+    if (!n) throw new Error('No polygons found');
+    map.fitBounds(shapes.getBounds(), { maxZoom:17 });
+    onShapes();
+  } catch(err){ alert('Could not read that file: ' + err.message + '. Use a GeoJSON in WGS84 (EPSG:4326) with Polygon or MultiPolygon features.'); }
+  e.target.value = '';
+});
+
+/* exports */
+function download(name, text, type){
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], { type })); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+document.getElementById('csvBtn').onclick = () => {
+  const head = [['Land Offset Estimator (oenvc.com) — screening estimate only'], ['Generated', new Date().toISOString().slice(0,10)], ['Section', S.tab === 'bio' ? 'Biodiversity offsets' : 'Land carbon'], ['Centroid (lat, lon)', S.centroid ? `${S.centroid[1].toFixed(5)}, ${S.centroid[0].toFixed(5)}` : '']];
+  const all = head.concat(S.lastRows.map(([k,v]) => [k, typeof v === 'number' ? (Math.round(v*1000)/1000) : v]));
+  download('land-offset-estimate.csv', all.map(r => r.map(x => `"${String(x ?? '').replace(/"/g,'""')}"`).join(',')).join('\r\n'), 'text/csv');
+};
+document.getElementById('gjBtn').onclick = () => download('site-boundary.geojson', JSON.stringify(featureCollection(), null, 1), 'application/geo+json');
+document.getElementById('printBtn').onclick = () => window.print();
+document.getElementById('yr').textContent = '© ' + new Date().getFullYear();
+
+render();
+</script>
+</body>
+</html>
